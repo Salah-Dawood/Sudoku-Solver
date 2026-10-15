@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sudoku</title>
+<style>
+  :root {
+    --bg: #eef1f5; --panel: #ffffff; --ink: #14213d; --muted: #5d6881; --line: #cfd6e3;
+    --accent: #2347c5; --on-accent: #ffffff; --error: #b3261e; --ok: #1c7a4a;
+    --peer: #e6ebf5; --same: #cbd6f8; --sel: #aebff5; --errbg: #fbdad7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10141f; --panel: #181e2d; --ink: #e6eaf5; --muted: #94a0bb; --line: #2f384d;
+      --accent: #7a98ff; --on-accent: #0b1020; --error: #f2b8b5; --ok: #7fd6a5;
+      --peer: #202842; --same: #2d3a66; --sel: #3d4f8f; --errbg: #5a2a28;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; padding: 24px 16px 48px; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 880px; margin: 0 auto; }
+  h1 { margin: 0 0 16px; font-size: 1.6rem; }
+  h2 { margin: 0 0 12px; font-size: 1.05rem; }
+  nav { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+  nav button { border: 0; border-bottom: 3px solid transparent; border-radius: 0; background: none; color: var(--muted); padding: 8px 14px; }
+  nav button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 20px; }
+  label { display: block; font-size: .9rem; color: var(--muted); margin: 12px 0 4px; }
+  input[type="text"], textarea, select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
+  input[type="text"], textarea { width: 100%; }
+  textarea { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .15em; height: 220px; resize: vertical; }
+  input[type="file"] { font-size: .9rem; color: var(--muted); }
+  button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px; padding: 8px 14px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  button:disabled { opacity: .6; cursor: wait; }
+  :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .status { margin: 12px 0 0; min-height: 1.5em; font-size: .95rem; }
+  .status.error { color: var(--error); }
+  .status.ok { color: var(--ok); }
+
+  .play { max-width: 480px; margin: 0 auto; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+  .bar label { display: flex; align-items: center; gap: 8px; margin: 0; }
+  .stats { display: flex; justify-content: space-between; margin: 16px 0 12px; color: var(--muted); font-size: .95rem; font-variant-numeric: tabular-nums; }
+  .stats b { color: var(--ink); font-size: 1.1rem; }
+  #pad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 14px 0; }
+  #pad button { padding: 10px 0; font-size: 1.1rem; }
+
+  .board { display: grid; grid-template-columns: repeat(9, 1fr); aspect-ratio: 1; max-width: 440px; border: 3px solid var(--ink); margin: 0 auto; font-variant-numeric: tabular-nums; }
+  .board > * { display: flex; align-items: center; justify-content: center; min-width: 0; padding: 0; border: 0; border-radius: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--panel); color: var(--accent); font: inherit; font-size: clamp(1rem, 4.5vw, 1.4rem); }
+  .board > :nth-child(3n) { border-right: 3px solid var(--ink); }
+  .board > :nth-child(9n) { border-right: 0; }
+  .board > :nth-child(n+19):nth-child(-n+27), .board > :nth-child(n+46):nth-child(-n+54) { border-bottom: 3px solid var(--ink); }
+  .board > :nth-child(n+73) { border-bottom: 0; }
+  #board > * { color: var(--ink); cursor: default; }
+  #game > .given { color: var(--ink); font-weight: 700; }
+  #game > .hint { color: var(--ok); font-weight: 600; }
+  #game > .peer { background: var(--peer); }
+  #game > .same { background: var(--same); }
+  #game > .sel { background: var(--sel); }
+  #game > .err { background: var(--errbg); color: var(--error); }
+
+  .solve-grid { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; }
+  #solve { margin-top: 16px; }
+  #empty { color: var(--muted); text-align: center; margin: 0 0 12px; }
+  #board-title { margin: 12px 0 0; text-align: center; color: var(--muted); font-size: .9rem; word-break: break-all; }
+  #download { display: block; text-align: center; margin-top: 8px; color: var(--accent); }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+  li:first-child { border-top: 0; }
+  li button { border: 0; background: none; color: var(--accent); padding: 0; text-align: left; word-break: break-all; }
+  li a { color: var(--muted); font-size: .9rem; white-space: nowrap; }
+  #solved-section { grid-column: 1 / -1; }
+  @media (max-width: 720px) { .solve-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sudoku</h1>
+  <nav role="tablist">
+    <button role="tab" data-tab="solve" aria-selected="true">Solve a puzzle</button>
+    <button role="tab" data-tab="play" aria-selected="false">Play (NOT JAVA/VIBE CODED)</button>
+  </nav>
+
+  <div id="tab-play" class="play" hidden>
+    <section>
+      <div class="bar">
+        <label>Difficulty
+          <select id="level">
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </label>
+        <button class="primary" id="new">New game</button>
+      </div>
+      <div class="stats">
+        <span>Time <b id="time">0:00</b></span>
+        <span>Hints <b id="hints">0</b></span>
+        <span>Score <b id="score">0</b></span>
+      </div>
+      <div id="game" class="board"></div>
+      <div id="pad"></div>
+      <div class="bar">
+        <button id="hint">Hint</button>
+        <button id="save">Save game</button>
+        <button id="load">Load game</button>
+      </div>
+      <p class="status" id="play-status" role="status"></p>
+    </section>
+  </div>
+
+  <div id="tab-solve" class="solve-grid">
+    <section>
+      <h2>Puzzle</h2>
+      <label for="name">Name</label>
+      <input type="text" id="name" autocomplete="off">
+      <label for="file">Load from a .txt file</label>
+      <input type="file" id="file" accept=".txt,text/plain">
+      <label for="puzzle">Nine rows of nine characters. Use 0, . or - for empty cells.</label>
+      <textarea id="puzzle" spellcheck="false" placeholder="530070000&#10;600195000&#10;098000060&#10;800060003&#10;400803001&#10;700020006&#10;060000280&#10;000419005&#10;000080079"></textarea>
+      <button class="primary" id="solve">Solve puzzle</button>
+      <p class="status" id="status" role="status"></p>
+    </section>
+    <section>
+      <h2>Solution</h2>
+      <p id="empty">Solve a puzzle or pick a saved solution to see it here.</p>
+      <div id="board" class="board" hidden></div>
+      <p id="board-title"></p>
+      <a id="download" hidden>Download file</a>
+    </section>
+    <section id="solved-section">
+      <h2>Saved solutions</h2>
+      <ul id="list"></ul>
+    </section>
+  </div>
+</main>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const API = '/api';
+  const BASE = { easy: 1000, medium: 2000, hard: 3000 };
+  const CLUES = { easy: 40, medium: 32, hard: 26 };
+  const SAVE_KEY = 'sudoku-save';
+  const ALL = [...Array(81).keys()];
+
+  function say(el, message, type) {
+    el.textContent = message;
+    el.className = 'status' + (type ? ' ' + type : '');
+  }
+
+  const bits = m => { let n = 0; for (; m; m &= m - 1) n++; return n; };
+  const sees = (i, j) => {
+    const r1 = i / 9 | 0, c1 = i % 9, r2 = j / 9 | 0, c2 = j % 9;
+    return r1 === r2 || c1 === c2 || ((r1 / 3 | 0) === (r2 / 3 | 0) && (c1 / 3 | 0) === (c2 / 3 | 0));
+  };
+  const shuffle = a => {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  };
+
+  function freeMask(g, i) {
+    const r = i / 9 | 0, c = i % 9, br = r - r % 3, bc = c - c % 3;
+    let used = 0;
+    for (let k = 0; k < 9; k++) {
+      used |= 1 << g[r * 9 + k];
+      used |= 1 << g[k * 9 + c];
+      used |= 1 << g[(br + (k / 3 | 0)) * 9 + bc + k % 3];
+    }
+    return ~used & 0x3FE;
+  }
+
+  function search(g, limit, random, sol) {
+    let pick = -1, free = 0, best = 10;
+    for (let i = 0; i < 81 && best > 0; i++) {
+      if (g[i]) continue;
+      const f = freeMask(g, i), n = bits(f);
+      if (n < best) { best = n; pick = i; free = f; }
+    }
+    if (pick < 0) {
+      if (sol && !sol.length) sol.push(...g);
+      return 1;
+    }
+    let digits = [1, 2, 3, 4, 5, 6, 7, 8, 9].filter(d => free & (1 << d));
+    if (random) shuffle(digits);
+    let count = 0;
+    for (const d of digits) {
+      g[pick] = d;
+      count += search(g, limit - count, random, sol);
+      g[pick] = 0;
+      if (count >= limit) break;
+    }
+    return count;
+  }
+
+  function generate(level) {
+    const solution = [];
+    search(Array(81).fill(0), 1, true, solution);
+    const puzzle = [...solution];
+    let clues = 81;
+    for (const i of shuffle([...ALL])) {
+      if (clues <= CLUES[level]) break;
+      const v = puzzle[i];
+      puzzle[i] = 0;
+      if (search(puzzle, 2, false) === 1) clues--; else puzzle[i] = v;
+    }
+    return { puzzle, solution };
+  }
+
+  let game = null, sel = -1, tick = null;
+  const cells = [];
+  const val = i => game.puzzle[i] || game.entries[i];
+  const fmt = s => `${s / 60 | 0}:${String(s % 60).padStart(2, '0')}`;
+  const score = () => Math.max(0, BASE[game.level] - game.seconds * 2 - game.hints * 100);
+
+  function stats() {
+    $('time').textContent = fmt(game.seconds);
+    $('hints').textContent = game.hints;
+    $('score').textContent = score();
+  }
+
+  function conflicts() {
+    const bad = new Set();
+    for (let i = 0; i < 81; i++) {
+      const a = val(i);
+      if (!a) continue;
+      for (let j = i + 1; j < 81; j++) {
+        if (val(j) === a && sees(i, j)) { bad.add(i); bad.add(j); }
+      }
+    }
+    return bad;
+  }
+
+  function render() {
+    const bad = conflicts();
+    const selVal = sel >= 0 ? val(sel) : 0;
+    cells.forEach((el, i) => {
+      const v = val(i);
+      el.textContent = v || '';
+      el.setAttribute('aria-label', `Row ${(i / 9 | 0) + 1}, column ${i % 9 + 1}, ${v || 'empty'}`);
+      el.className = [
+        game.puzzle[i] ? 'given' : '',
+        game.hinted[i] ? 'hint' : '',
+        bad.has(i) ? 'err' : '',
+        i === sel ? 'sel' : selVal && v === selVal ? 'same' : sel >= 0 && sees(i, sel) ? 'peer' : ''
+      ].filter(Boolean).join(' ');
+    });
+  }
+
+  function win() {
+    game.done = true;
+    clearInterval(tick);
+    stats();
+    say($('play-status'), `Solved in ${fmt(game.seconds)} with ${game.hints} hint${game.hints === 1 ? '' : 's'}. Score: ${score()}.`, 'ok');
+  }
+
+  function afterChange() {
+    render();
+    if (!game.done && ALL.every(val) && conflicts().size === 0) win();
+  }
+
+  function setCell(v) {
+    if (!game || game.done || sel < 0 || game.puzzle[sel] || game.hinted[sel]) return;
+    game.entries[sel] = v;
+    say($('play-status'), '');
+    afterChange();
+  }
+
+  function startTimer() {
+    clearInterval(tick);
+    tick = setInterval(() => {
+      if (!document.hidden && !$('tab-play').hidden && !game.done) { game.seconds++; stats(); }
+    }, 1000);
+  }
+
+  function begin(message) {
+    sel = game.puzzle.findIndex((v, i) => !v && !game.entries[i]);
+    startTimer();
+    render();
+    stats();
+    say($('play-status'), message, message ? 'ok' : '');
+  }
+
+  function newGame() {
+    const level = $('level').value;
+    say($('play-status'), 'Generating puzzle…');
+    setTimeout(() => {
+      const { puzzle, solution } = generate(level);
+      game = { level, puzzle, solution, entries: Array(81).fill(0), hinted: Array(81).fill(false), hints: 0, seconds: 0, done: false };
+      begin('');
+    }, 20);
+  }
+
+  function hint() {
+    if (!game || game.done) return;
+    let i = sel;
+    if (i < 0 || game.puzzle[i] || game.hinted[i] || val(i) === game.solution[i]) {
+      const grid = ALL.map(val);
+      i = -1;
+      let best = 10;
+      ALL.forEach(k => {
+        if (grid[k]) return;
+        const n = bits(freeMask(grid, k));
+        if (n < best) { best = n; i = k; }
+      });
+      if (i < 0) i = ALL.find(k => val(k) !== game.solution[k]);
+    }
+    game.entries[i] = game.solution[i];
+    game.hinted[i] = true;
+    game.hints++;
+    sel = i;
+    stats();
+    afterChange();
+    if (!game.done) say($('play-status'), `Hint used: row ${(i / 9 | 0) + 1}, column ${i % 9 + 1}. Each hint costs 100 points.`);
+  }
+
+  function save() {
+    if (!game) return;
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify(game));
+      say($('play-status'), 'Game saved in this browser.', 'ok');
+    } catch {
+      say($('play-status'), 'Could not save the game in this browser.', 'error');
+    }
+  }
+
+  function load() {
+    try {
+      const saved = localStorage.getItem(SAVE_KEY);
+      if (!saved) {
+        say($('play-status'), 'No saved game found.', 'error');
+        return;
+      }
+      const data = JSON.parse(saved);
+      if (data.puzzle.length !== 81 || data.entries.length !== 81 || !BASE[data.level]) throw new Error();
+      game = data;
+      $('level').value = game.level;
+      begin('Game loaded.');
+    } catch {
+      say($('play-status'), 'The saved game could not be read.', 'error');
+    }
+  }
+
+  function buildCells() {
+    const board = $('game');
+    ALL.forEach(i => {
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.addEventListener('click', () => { sel = i; render(); });
+      board.appendChild(el);
+      cells.push(el);
+    });
+    const pad = $('pad');
+    for (let d = 1; d <= 9; d++) {
+      const b = document.createElement('button');
+      b.textContent = d;
+      b.addEventListener('click', () => setCell(d));
+      pad.appendChild(b);
+    }
+    const erase = document.createElement('button');
+    erase.textContent = 'Erase';
+    erase.addEventListener('click', () => setCell(0));
+    pad.appendChild(erase);
+  }
+
+  document.addEventListener('keydown', e => {
+    if (!game || $('tab-play').hidden || e.target.matches('input, select, textarea')) return;
+    const arrows = { ArrowUp: -9, ArrowDown: 9, ArrowLeft: -1, ArrowRight: 1 };
+    if (/^[1-9]$/.test(e.key)) setCell(+e.key);
+    else if (['Backspace', 'Delete', '0'].includes(e.key)) setCell(0);
+    else if (e.key in arrows && sel >= 0) {
+      const col = sel % 9 + (Math.abs(arrows[e.key]) === 1 ? arrows[e.key] : 0);
+      const next = sel + arrows[e.key];
+      if (next >= 0 && next < 81 && col >= 0 && col < 9) {
+        sel = next;
+        render();
+        cells[sel].focus();
+      }
+    } else return;
+    e.preventDefault();
+  });
+
+  document.querySelectorAll('[data-tab]').forEach(tab => tab.addEventListener('click', () => {
+    document.querySelectorAll('[data-tab]').forEach(t => {
+      const active = t === tab;
+      t.setAttribute('aria-selected', active);
+      $('tab-' + t.dataset.tab).hidden = !active;
+    });
+    if (tab.dataset.tab === 'play' && !game) newGame();
+  }));
+
+  $('new').addEventListener('click', newGame);
+  $('hint').addEventListener('click', hint);
+  $('save').addEventListener('click', save);
+  $('load').addEventListener('click', load);
+
+  function showBoard(text, fileName) {
+    const board = $('board');
+    if (!board.children.length) {
+      ALL.forEach(() => board.appendChild(document.createElement('div')));
+    }
+    text.trim().split(/\r?\n/).forEach((row, r) => {
+      [...row].forEach((ch, c) => { board.children[r * 9 + c].textContent = ch; });
+    });
+    board.hidden = false;
+    $('empty').hidden = true;
+    $('board-title').textContent = fileName;
+    const link = $('download');
+    link.href = `${API}/get-solved/${encodeURIComponent(fileName)}`;
+    link.hidden = false;
+  }
+
+  async function errorMessage(res) {
+    const body = await res.text();
+    try {
+      const data = JSON.parse(body);
+      const details = data.errors ? Object.values(data.errors).join(', ') : '';
+      return details || data.message || body;
+    } catch {
+      return body || `Request failed (${res.status})`;
+    }
+  }
+
+  async function openSolution(fileName) {
+    const res = await fetch(`${API}/get-solved/${encodeURIComponent(fileName)}`);
+    if (!res.ok) {
+      say($('status'), await errorMessage(res), 'error');
+      return;
+    }
+    showBoard(await res.text(), fileName);
+  }
+
+  async function loadList() {
+    const list = $('list');
+    const res = await fetch(`${API}/get-solved`);
+    const names = res.ok ? await res.json() : [];
+    list.replaceChildren();
+    if (names.length === 0) {
+      const li = document.createElement('li');
+      li.textContent = 'No saved solutions yet.';
+      list.appendChild(li);
+      return;
+    }
+    names.sort().forEach(name => {
+      const li = document.createElement('li');
+      const open = document.createElement('button');
+      open.textContent = name;
+      open.addEventListener('click', () => openSolution(name));
+      const download = document.createElement('a');
+      download.textContent = 'Download';
+      download.href = `${API}/get-solved/${encodeURIComponent(name)}`;
+      li.append(open, download);
+      list.appendChild(li);
+    });
+  }
+
+  async function solve() {
+    const button = $('solve');
+    const form = new FormData();
+    form.append('name', $('name').value.trim());
+    form.append('file', new File([$('puzzle').value], 'puzzle.txt', { type: 'text/plain' }));
+    button.disabled = true;
+    say($('status'), 'Solving…');
+    try {
+      const res = await fetch(`${API}/upload`, { method: 'POST', body: form });
+      if (!res.ok) {
+        say($('status'), await errorMessage(res), 'error');
+        return;
+      }
+      const fileName = await res.text();
+      say($('status'), 'Solved and saved.', 'ok');
+      await openSolution(fileName);
+      await loadList();
+    } catch {
+      say($('status'), 'Could not reach the server.', 'error');
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  $('file').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (file) $('puzzle').value = await file.text();
+  });
+  $('solve').addEventListener('click', solve);
+
+  buildCells();
+  loadList().catch(() => {});
+</script>
+</body>
+</html>
